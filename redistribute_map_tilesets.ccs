@@ -13,7 +13,7 @@ import asm65816
 
 // Table declaring the background size for each tileset. Each entry must be at
 // most 896. Indexed by tileset index
-// (https://datacrystal.romhacking.net/wiki/EarthBound:Map_Data:Tileset_Table#Values).
+// (https://datacrystal.tcrf.net/wiki/EarthBound/Map_Data/Tileset_Table#Values).
 //
 // If a tileset is declared to have x background characters, it will then have
 // (896 - x) foreground characters, the first x of which (typically all of them,
