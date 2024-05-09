@@ -1,0 +1,153 @@
+// Redistribute Map Tilesets v1.0
+// Copyright 2024 Eric Orth
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+
+
+import asm65816
+
+// Table declaring the background size for each tileset. Each entry must be at
+// most 896. Indexed by tileset index
+// (https://datacrystal.romhacking.net/wiki/EarthBound:Map_Data:Tileset_Table#Values).
+//
+// If a tileset is declared to have x background characters, it will then have
+// (896 - x) foreground characters, the first x of which (typically all of them,
+// unless x is less than 448) will be paired with the background characters and
+// automatically loaded on top whenever the map specifies the paired background
+// character.
+//
+// If the map specifies a character greater than x, just the specified
+// foreground character will be loaded, which will typically look weird unless
+// the entire 8x8-pixel character is filled.
+TilesetRedistributionTableVersion:
+  byte 01
+TilesetRedistributionTableCount:
+  byte 20
+TilesetRedistributionTable:
+  short 512  // 00: Lost underworld
+  short 512  // 01: Onett
+  short 512  // 02: Twoson
+  short 512  // 03: Threed
+  short 512  // 04: Fourside
+  short 512  // 05: Magicant
+  short 512  // 06: Outdoors
+  short 512  // 07: Summers
+  short 512  // 08: Dusty Dunes Desert
+  short 512  // 09: Dalaam
+  short 512  // 10: Indoors 1
+  short 512  // 11: Indoors 2
+  short 512  // 12: Stores 1
+  short 512  // 13: Caves 1
+  short 512  // 14: Indoors 3
+  short 512  // 15: Stores 2
+  short 512  // 16: Indoors 4
+  short 512  // 17: Winters
+  short 512  // 18: Scaraba
+  short 512  // 19: Caves 2
+  
+// Set overworld map BG2 to start at VRAM word 0 (same as BG1). This results in
+// both backgrounds sharing the same pool of 896 characters.
+ROM[0xC0002A] = short 0
+ROM[0xC01952] = short 0
+
+// Replace 0xC00ED1-0xC00EE5 in LoadTilemapRowToVram()
+ROM[0xC00ED1] = {
+  PHX
+  JSL(LoadForegroundTile)
+  PLX
+  JMP(0x0EE6)
+}
+
+// Replace 0xC01081-0xC01095 in LoadTilemapColumnToVram()
+ROM[0xC01081] = {
+  PHX
+  JSL(LoadForegroundTile)
+  PLX
+  JMP(0x1096)
+}
+
+// Mutates $12, initially containing a map background tilemap entry, into a
+// map foreground tilemap entry
+LoadForegroundTile:
+  // 6 bytes of DP space
+  PHD
+  TDC
+  ADC_i(0xfffa)
+  TCD
+  
+  // Get table size
+  // $00 = TilesetRedistributionTableCount & #$00ff
+  LDA_al(TilesetRedistributionTableCount)
+  AND_i(0x00ff)
+  STA_d(0x00)
+  
+  // Validate table size
+  // if (current_tileset_index >= $00) break
+  LDA_al(0x7e4372)
+  CMP_d(0x00)
+  BCC(1)
+  BRK
+
+  // Calculate table index
+  // x = current_tileset_index * 2
+  ASL
+  TAX
+
+  // Get num background tiles
+  // $02 = TilesetRedistributionTable,x
+  LDA_xl(TilesetRedistributionTable)  // Background size
+  STA_d(0x02)
+  
+  // if ($02 >= #897) break
+  CMP_i(896)
+  BCC(1)
+  BRK
+  
+  // Determine num foreground tiles
+  // $04 = #896 - $02
+  LDA_i(896)
+  SEC
+  SBC_d(0x02)
+  STA_d(0x04)
+  
+  // If tile is already a foreground tile, use it directly as such
+  // if (($18 & #$03ff) >= $02)
+  LDA_d(0x18)
+  AND_i(0x03ff)
+  CMP_d(0x02)
+  BCC_a(else0)
+  
+  // $18 |= #$2000
+  LDA_d(0x18)
+  ORA_i(0x2000)
+  STA_d(0x18)
+  BRA_a(end0)
+  
+else0:
+  // If tile has linked foreground tile, convert to foreground tilemap entry
+  // if (($18 & #$03ff) < $04)
+  CMP_d(0x04)
+  BCS_a(else1)
+
+  // $18 |= #$2000
+  // $18 += $02
+  LDA_d(0x18)
+  ORA_i(0x2000)
+  CLC
+  ADC_d(0x02)
+  STA_d(0x18)
+  BRA_a(end0)
+
+else1:
+  // $18 = #0
+  STZ_d(0x18)
+
+end0:
+
+  PLD
+  RTL
