@@ -11,22 +11,42 @@
 // THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+// Explanation:
+//
+// An EarthBound tileset contains a list of 896 characters (often called
+// "minitiles"). Normally the first 512 are background characters, and the
+// remaining 384 are foreground characters. The first 384 background characters
+// are automatically tied to and rendered with foreground characters (character
+// 0 tied to character 512, character 1 tied to character 513, etc). And the
+// remaining 128 background characters are always rendered on their own. In
+// EbProjEdit, the characters are always shown as 512 entries, the first 384 of
+// which are doubled up to allow modifying the separate background and
+// foreground characters.
+//
+// This script moves the border between background and foreground via setting a
+// per-tileset configuration in the TilesetRedistributionTable below. So with a
+// tileset adjusted to 536 background characters, they would now be followed by
+// 360 foreground characters, and the pairing would be character 0 tied to
+// character 536, character 1 tied to character 537, etc. EbProjEdit doesn't
+// know what to do with it and the TileEditor pairs up characters that won't
+// actually be paired up when rendered in EarthBound.
+//
+// Additionally, this script allows map tile entries to directly specify
+// foreground characters, which in some rare cases may be used to further
+// stretch the graphical flexibility of a tileset. E.g., if a tileset is
+// configured for the standard 512 background characters, a map tile could
+// specify character 600, a foreground character. EarthBound would then render
+// just the foreground character without pairing with any background character,
+// which would typically look weird unless the foreground character fills the
+// entire 8x8 space.
+
 
 import asm65816
 
-// Table declaring the background size for each tileset. Each entry must be at
-// most 896. Indexed by tileset index
+// Table declaring the number of background characters for each tileset. Each
+// tileset must have at most 896 background characters. Table is indexed by
+// tileset index
 // (https://datacrystal.tcrf.net/wiki/EarthBound/Map_Data/Tileset_Table#Values).
-//
-// If a tileset is declared to have x background characters, it will then have
-// (896 - x) foreground characters, the first x of which (typically all of them,
-// unless x is less than 448) will be paired with the background characters and
-// automatically loaded on top whenever the map specifies the paired background
-// character.
-//
-// If the map specifies a character greater than x, just the specified
-// foreground character will be loaded, which will typically look weird unless
-// the entire 8x8-pixel character is filled.
 TilesetRedistributionTableVersion:
   byte 01
 TilesetRedistributionTableCount:
