@@ -1,0 +1,113 @@
+// Skip Intro v0.1
+// Developed at https://github.com/esorth/EbCcscripts/blob/main/skip_intro.ccs
+//
+// Copyright 2024 Eric Orth
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+
+// Skips all logos/cutscenes/titles/menus/etc and jumps straight
+// into the game, always starting at level 1, in Onett.
+
+import asm65816
+import jsl_rts
+
+ROM[0xc0b7eb] = JML(InitGame)
+
+// Set various game/character properties for a custom new game.
+// Inspired by the new game code in $c1f805
+InitGame:
+  PHD
+  TDC
+  SEC
+  SBC_i(12)
+  TCD
+  
+  // Init text scripts system
+  JSL(0xc200d9)
+  
+  // 8-bit settings
+  SEP(0x20)
+
+  // Set text speed to medium
+  LDA_8(2)
+  STA_a(0x98b6)
+  
+  // Sound setting to stereo
+  LDA_8(1)
+  STA_a(0x98b7)
+  
+  // Window flavor to plain
+  LDA_8(1)
+  STA_a(0x99cd)
+  
+  // TODO: Write character name to $7e99ce..$7e99d2
+  
+  // Back to 16-bit mode
+  REP(0x20)
+  
+  // Character stats
+  LDA_i(1)
+  LDX_i(1)
+  LDY_i(0)
+  JSL_RTS_C1(0xc1d8d0)
+  
+  // TODO: Figure out why character is immortal.
+  
+  // Set player location (Onett near burger shop)
+  LDA_i(1911)
+  LDX_i(1110)
+  JSL(0xc0b65f)
+  
+  // Respawn location
+  LDA_a(0x9877)
+  STA_a(0x9d1f)
+  LDA_a(0x987b)
+  STA_a(0x9d21)
+  
+  // Init/Clear text scripts
+  JSL(0xc064d4)
+  
+  // Queue script
+  LDA_i(short[0] InitGameScript)
+  STA_d(0x0e)
+  LDA_i(short[1] InitGameScript)
+  STA_d(0x10)
+  JSL(0xc46881)
+  
+  // Return to game, just after main menu
+  PLD
+  JML(0xc0b7f2)
+  
+InitGameScript:
+  music_stop()
+
+  set (flag 0x68) // Pokey/Picky punished, first day events cleaned up
+  set (flag 0x1A6) // Onett daytime palette
+  set (flag 0x205) // Ness's house's lights are on
+  unset (flag 0x6B ) // When on, primes sunrise transition exiting Pokey's house
+  unset(flag 749) // No pajamas?
+  set (flag 0x1D5) // Suppresses the day 1 townsfolk
+  set (flag 0x14) // Picky joined your party. Never unset
+  set (flag 0x22) // Post Starman Jr / Picky left party. Never unset
+  set (flag 0x64) // King doesn't want to go outside
+  set (flag 0x177) // Most Onett townsfolk
+  set (flag 0x5E) // Seems to fix your mom
+  unset (flag 0x5F ) // Makes phones work (might already be unset)
+  set (flag 0x62) // Makes Ness's phone specifically work
+  set (flag 0xC7) // Know how to call Ness's dad
+  set (flag 0xC8) // Know how to call Ness's mom
+  set (flag 0xB) // Turns off random enemy spawns
+  
+  // Turn on daytime
+  "[1f e1 01 00 01]"
+  
+  pause(1)
+
+  music_resume()
+  save()
+  eob
