@@ -1,0 +1,98 @@
+// ASM Teleport v0.1
+// Developed at https://github.com/esorth/EbCcscripts/blob/main/asm_teleport.ccs
+//
+// Copyright 2024 Eric Orth
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+
+// ASM subroutine allowing party teleport to requested coordinates.
+// Inputs:
+//   x: destination x pixel coord
+//   y: destination y pixel coord
+
+import asm65816
+
+DoTeleport:
+  PHD
+  TDC
+  SEC
+  SBC_i(8)
+  TCD
+  
+  // $02 = x
+  STX_d(0x02)
+  // $04 = y
+  STY_d(0x04)
+  
+  // for ($06 = #1; $06 < #11; $06++)
+  LDA_i(1)
+  STA_d(0x06)
+
+Loop:
+  // SetFlagValue(flag_number=$06, flag_value=#0)
+  LDX_i(0)
+  // a already contains $06
+  JSL(0xc2165e)
+
+  // $06++
+  LDA_d(0x06)
+  INC
+  STA_d(0x06)
+  
+  CMP_i(11)
+  BCC_a(Loop)
+  // End Loop
+  
+  // PlaySoundEffect(#$16)
+  LDA_i(0x0016)
+  JSL(0xc0abe0)
+  
+  // FadeOut(fade_step=#1, step_duration=#1, mosaic=#$0007)
+  LDA_i(1)
+  LDX_i(1)
+  LDY_i(0x0007)
+  JSL(0xc08814)
+  
+  // ReloadMapGraphicsAtPos(x=$02, y=$04)
+  LDA_d(0x02)
+  LDX_d(0x04)
+  JSL(0xc013f6)
+  
+  // MoveParty(x_coord=$02, y_coord=$04, direction=#4 (down))
+  LDA_d(0x02)
+  LDX_d(0x04)
+  LDY_i(4)
+  JSL(0xc03fa9)
+  
+  // $7e2890 (PlayerMovedFlag) = #$0000
+  STZ_a(0x2890)
+  
+  // Update screen positions
+  JSL(0xc08b26)
+  
+  // Reload sprites
+  JSL(0xc065a3)
+  
+  // TODO: Figure out how to get screen positions fixed correctly.
+  
+  // FadeIn(fade_step=#1, step_duration=#11, mosaic=#$0007)
+  LDA_i(1)
+  LDX_i(1)
+  LDY_i(0x0007)
+  JSL(0xc087ce)
+  
+  // Restore all entities movement.
+  JSL(0xc09451)
+  
+  // $7e5dc4 (StairsDirection) = #$ffff
+  LDA_i(0xffff)
+  STA_a(0x5dc4)
+  
+  PLD
+  RTL
+  
