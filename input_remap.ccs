@@ -1,0 +1,66 @@
+// Input Remap v0.1
+// Developed at https://github.com/esorth/EbCcscripts/blob/main/input_remap.ccs
+//
+// Copyright 2024 Eric Orth
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+
+import asm65816
+
+define A_BUTTON = short 0x0080
+// TODO: Add the rest of the buttons or maybe just cancel that idea since ccscript doesn't seem to support ORing them
+
+command ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(button_bitmap, asm_routine, arg, movement_mask) {
+  short button_bitmap
+  long asm_routine
+  long arg
+  short movement_mask
+}
+command ASM_INPUT_REMAP0_WITH_MOVEMENT_MASK(button_bitmap, asm_routine, movement_mask) {
+  ASM_REMAP1_WITH_MOVEMENT(button_bitmap, asm_routine, 0, 0x7fff)
+}
+command ASM_INPUT_REMAP1(button_bitmap, asm_routine, arg) {
+  ASM_REMAP1_WITH_MOVEMENT(button_bitmap, asm_routine, arg, 0x7fff)
+}
+command ASM_INPUT_REMAP0(button_bitmap, asm_routine) {
+  ASM_REMAP1_WITH_MOVEMENT(button_bitmap, asm_routine, 0, 0x7fff)
+}
+
+// TODO: add script-running variants
+
+command ASM_INPUT_REMAP1_FALLTHROUGH(asm_routine, arg) {
+  ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(0x0000, asm_routine, arg, 0x7fff)
+}
+command ASM_INPUT_REMAP0_FALLTHROUGH(asm_routine) {
+  ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(0x0000, asm_routine, 0, 0x7fff)
+}
+command END_INPUT_REMAP() {
+  ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(0x0000, 0x000000, 0, 0x7fff)
+}
+
+InputRemapTableVersion:
+  byte 01
+// TODO: Figure out if this slot-based replaceable system actually works in Coilsnake
+InputRemapTableSlot0:
+  ASM_REMAP0(A_BUTTON, 0xc134a7)
+InputRemapTableSlot1:
+  ASM_REMAP0_WITH_MOVEMENT_MASK(0xa000, 0xc13ca1, 0x8003)
+InputRemapTableSlot2:
+  ASM_REMAP0(0x0040, 0xc13ce5)
+InputRemapTableSlot3:
+  ASM_REMAP0(0x0020, 0xc13c32)
+InputRemapTableSlot4:
+  END_INPUT_REMAP()
+// TODO: Add a bunch of empty slots to fill in?
+
+ROM[0xc0b8e0] = {
+  JML(ReplacementInputHandler)
+}
+
+ReplacementInputHandler:
+  // TODO
