@@ -10,53 +10,96 @@
 // THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+// Remapping utility for non-directional controller inputs during normal world travel. Remapping occurs via entries to
+// the InputRemapTable below, which can be modified either here in this file or elsewhere via
+// `ROM[input_remap.InputRemapTable] = ...`.
+//
+// For each frame, while EarthBound is in normal world travel mode, table entries are processed in order until an
+// entry is matched and its designated ASM routine (if any) is run.
+
+// TODO: Add directional input remapping.
+
 import asm65816
 
-define A_BUTTON = short 0x0080
-// TODO: Add the rest of the buttons or maybe just cancel that idea since ccscript doesn't seem to support ORing them
+// The format of an individual table entry. The entry is considered a match with current input if and only if *all*
+// filtering criteria in the entry (that is `controller1_fresh_button_bitmap`, `controller1_pulse_bitmap`,
+// `controller2_fresh_button_bitmap`, `controller2_pulse_bitmap`, and `movement_mask`) are considered to match.
+// Commands are provided below to simplify typical entries.
+command INPUT_TABLE_ENTRY(controller1_fresh_button_bitmap, controller1_pulse_bitmap, 
+                          controller2_fresh_button_bitmap, controller2_pulse_bitmap,
+                          movement_filter,
+                          asm_routine, a_arg, x_arg, y_arg) {
+  // Bitmap of buttons that must be in https://datacrystal.tcrf.net/wiki/EarthBound/Controller_input_memory#$7E006D
+  // (new controller 1 data) for the entry to match. The bitmap is an AND filter that only matches if *all* buttons
+  // in the bitmap are pressed but ignores buttons not in the bitmap
+  // (`match = ($7E006D & controller1_fresh_button_bitmap) == controller1_fresh_button_bitmap`). If an OR filter is
+  // desired, that can be accomplished via consecutive table entries that designate the same ASM routine to run. On a
+  // bitmap of `0x0000`, always matches, no matter the input.
+  short controller1_fresh_button_bitmap
 
-command ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(button_bitmap, asm_routine, arg, movement_mask) {
-  short button_bitmap
+  // Bitmap of buttons that must be in https://datacrystal.tcrf.net/wiki/EarthBound/Controller_input_memory#$7E0069
+  // (controller 1 data with held-button pulses) for the entry to match. The bitmap is an AND filter that only matches
+  // if *all* buttons in the bitmap are pressed or held (but ignores buttons not in the bitmap).
+  short controller1_pulse_bitmap
+
+  // Bitmap of buttons that must be in https://datacrystal.tcrf.net/wiki/EarthBound/Controller_input_memory#$7E006F
+  // (new controller 2 data) for the entry to match. The bitmap is an AND filter that only matches if *all* buttons
+  // in the bitmap are pressed (but ignores buttons not in the bitmap).
+  short controller2_fresh_button_bitmap
+
+  // Bitmap of buttons that must be in https://datacrystal.tcrf.net/wiki/EarthBound/Controller_input_memory#$7E006B
+  // (controller 2 data with held-button pulses) for the entry to match. The bitmap is an AND filter that only matches
+  // if *all* buttons in the bitmap are pressed or held (but ignores buttons not in the bitmap).
+  short controller2_pulse_bitmap
+
+  // Bitmap filter on the value of the current party movement style (`$7e9883`) plus one. If the most-significant bit
+  // (`0x8000`) is zero, matches if the movement style matches any of the remaining bits (thus a filter value of
+  // `0x7fff` will always match any movement style). If the most-significant bit (`0x8000`) is one, matches if the
+  // movement style matches none of the remaining bits (thus a filter value of `0x8000` will always match any
+  // movement style).
+  short movement_filter
+
+  // ASM routine that will be called on entry match. If `0xffffffff`, input processing will complete without calling
+  // any ASM routine.
   long asm_routine
-  long arg
-  short movement_mask
-}
-command ASM_INPUT_REMAP0_WITH_MOVEMENT_MASK(button_bitmap, asm_routine, movement_mask) {
-  ASM_REMAP1_WITH_MOVEMENT(button_bitmap, asm_routine, 0, 0x7fff)
-}
-command ASM_INPUT_REMAP1(button_bitmap, asm_routine, arg) {
-  ASM_REMAP1_WITH_MOVEMENT(button_bitmap, asm_routine, arg, 0x7fff)
-}
-command ASM_INPUT_REMAP0(button_bitmap, asm_routine) {
-  ASM_REMAP1_WITH_MOVEMENT(button_bitmap, asm_routine, 0, 0x7fff)
-}
 
+  // Values that will be set to the accumulator/x/y registers before calling the ASM routine.
+  short a_arg
+  short x_arg
+  short y_arg
+}
+define INPUT_TABLE_ENTRY_SIZE = 20
+
+command BUTTON_PRESS(controller1_fresh_button_bitmap, asm_routine) {
+  INPUT_TABLE_ENTRY(controller1_fresh_button_bitmap, 0x0000, 0x0000, 0x0000, 0x7fff, asm_routine, 0, 0, 0)
+}
+command BUTTON_PRESS_WITH_MOVEMENT(controller1_fresh_button_bitmap, movement_filter, asm_routine) {
+  INPUT_TABLE_ENTRY(controller1_fresh_button_bitmap, 0x0000, 0x0000, 0x0000, movement_filter, asm_routine, 0, 0, 0)
+}
 // TODO: add script-running variants
 
-command ASM_INPUT_REMAP1_FALLTHROUGH(asm_routine, arg) {
-  ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(0x0000, asm_routine, arg, 0x7fff)
-}
-command ASM_INPUT_REMAP0_FALLTHROUGH(asm_routine) {
-  ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(0x0000, asm_routine, 0, 0x7fff)
-}
+// Always-match, do-nothing entry to stop input processing.
 command END_INPUT_REMAP() {
-  ASM_INPUT_REMAP1_WITH_MOVEMENT_MASK(0x0000, 0x000000, 0, 0x7fff)
+  INPUT_TABLE_ENTRY(0x0000, 0x0000, 0x0000, 0x0000, 0x7fff, 0xffffffff, 0, 0, 0)
 }
 
 InputRemapTableVersion:
   byte 01
-// TODO: Figure out if this slot-based replaceable system actually works in Coilsnake
-InputRemapTableSlot0:
-  ASM_REMAP0(A_BUTTON, 0xc134a7)
-InputRemapTableSlot1:
-  ASM_REMAP0_WITH_MOVEMENT_MASK(0xa000, 0xc13ca1, 0x8003)
-InputRemapTableSlot2:
-  ASM_REMAP0(0x0040, 0xc13ce5)
-InputRemapTableSlot3:
-  ASM_REMAP0(0x0020, 0xc13c32)
-InputRemapTableSlot4:
+InputRemapTable:
+  BUTTON_PRESS(A_BUTTON, 0xc134a7)                      // Default A behavior
+  BUTTON_PRESS_WITH_MOVEMENT(0x8000, 0xc13ca1, 0x8004)  // Default B (if not on bicycle) behavior
+  BUTTON_PRESS_WITH_MOVEMENT(0x2000, 0xc13ca1, 0x8004)  // Default Select (if not on bicycle) behavior (same as "B")
+  BUTTON_PRESS(0x0040, 0xc13ce5)                        // Default X behavior
+  BUTTON_PRESS(0x0020, 0xc13c32)                        // Default L behavior
   END_INPUT_REMAP()
-// TODO: Add a bunch of empty slots to fill in?
+  // Extra entries for increased table size for if overridden through `ROM[InputRemapTable] = ...`
+  END_INPUT_REMAP()
+  END_INPUT_REMAP()
+  END_INPUT_REMAP()
+  END_INPUT_REMAP()
+  END_INPUT_REMAP()
+  END_INPUT_REMAP()
+  END_INPUT_REMAP()
 
 ROM[0xc0b8e0] = {
   JML(ReplacementInputHandler)
